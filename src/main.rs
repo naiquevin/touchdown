@@ -1,7 +1,7 @@
 use minijinja::{context, path_loader, Environment};
 use std::path::{Path, PathBuf};
 use std::io;
-use std::fs::{self, DirEntry, File};
+use std::fs::{self, File};
 
 #[allow(unused)]
 #[derive(Debug)]
@@ -16,31 +16,28 @@ enum InputFile {
     Dir(PathBuf),
 }
 
-fn is_page(entry: &DirEntry) -> bool {
-    let filename = entry.file_name();
-    // Assuming filenames are valid utf-8
-    let filename_lossy = filename.to_string_lossy();
-    !filename_lossy.starts_with('_') && filename_lossy.ends_with(".html.jinja")
+fn is_page(filename: &str) -> bool {
+    filename.ends_with(".html.jinja")
 }
 
 // @TODO: Allow user specified exclusions
-fn is_ignorable(entry: &DirEntry) -> bool {
-    let filename = entry.file_name();
-    // Assuming filenames are valid utf-8
-    let filename_lossy = filename.to_string_lossy();
-    filename_lossy == ".git" || filename_lossy == "dist" || filename_lossy.ends_with('~')
+fn must_skip(filename: &str) -> bool {
+    filename == ".git" || filename == "dist" || filename.ends_with('~') || filename.starts_with('_')
 }
 
 fn get_input_files(base_dir: &Path) -> Result<Vec<InputFile>, Error> {
     let mut pages = vec![];
     for member in fs::read_dir(base_dir).map_err(Error::Io)? {
         let entry = member.map_err(Error::Io)?;
-        if is_ignorable(&entry) {
+        let filename = entry.file_name();
+        // Assuming filenames are valid utf-8
+        let filename_lossy = filename.to_string_lossy();
+        if must_skip(&filename_lossy) {
             // @TODO: Replace with a log line
             // println!("Ignoring entry: {entry:?}");
             continue;
         }
-        if is_page(&entry) {
+        if is_page(&filename_lossy) {
             pages.push(InputFile::Page(entry.path()));
         }
     }
