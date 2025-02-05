@@ -31,10 +31,10 @@ fn is_ignorable(entry: &DirEntry) -> bool {
     filename_lossy == ".git" || filename_lossy == "dist" || filename_lossy.ends_with('~')
 }
 
-fn get_input_files(base_dir: &Path) -> Vec<InputFile> {
+fn get_input_files(base_dir: &Path) -> Result<Vec<InputFile>, Error> {
     let mut pages = vec![];
-    for member in fs::read_dir(base_dir).unwrap() {
-        let entry = member.unwrap();
+    for member in fs::read_dir(base_dir).map_err(Error::Io)? {
+        let entry = member.map_err(Error::Io)?;
         if is_ignorable(&entry) {
             // @TODO: Replace with a log line
             // println!("Ignoring entry: {entry:?}");
@@ -44,7 +44,7 @@ fn get_input_files(base_dir: &Path) -> Vec<InputFile> {
             pages.push(InputFile::Page(entry.path()));
         }
     }
-    pages
+    Ok(pages)
 }
 
 fn ensure_output_dir(dir: &Path) -> Result<(), Error> {
@@ -80,7 +80,7 @@ fn main() -> Result<(), Error> {
     let output_dir = Path::new("/home/vineet/code/metropolis/website/dist");
     ensure_output_dir(output_dir)?;
     let env = init_jinja_env(input_dir);
-    let input_files = get_input_files(&Path::new(input_dir));
+    let input_files = get_input_files(&Path::new(input_dir))?;
     for file in input_files {
         match file {
             InputFile::Page(path) => render_page(&env, &output_dir, &path)?,
