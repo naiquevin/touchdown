@@ -23,10 +23,23 @@ fn is_page(entry: &DirEntry) -> bool {
     !filename_lossy.starts_with('_') && filename_lossy.ends_with(".html.jinja")
 }
 
+// @TODO: Allow user specified exclusions
+fn is_ignorable(entry: &DirEntry) -> bool {
+    let filename = entry.file_name();
+    // Assuming filenames are valid utf-8
+    let filename_lossy = filename.to_string_lossy();
+    filename_lossy == ".git" || filename_lossy == "dist" || filename_lossy.ends_with('~')
+}
+
 fn get_input_files(base_dir: &Path) -> Vec<InputFile> {
     let mut pages = vec![];
     for member in fs::read_dir(base_dir).unwrap() {
         let entry = member.unwrap();
+        if is_ignorable(&entry) {
+            // @TODO: Replace with a log line
+            // println!("Ignoring entry: {entry:?}");
+            continue;
+        }
         if is_page(&entry) {
             pages.push(InputFile::Page(entry.path()));
         }
