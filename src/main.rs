@@ -3,9 +3,17 @@ use std::path::{Path, PathBuf};
 use std::io;
 use std::fs::{self, DirEntry, File};
 
+#[allow(unused)]
 #[derive(Debug)]
 enum Error {
     Io(io::Error),
+}
+
+#[allow(unused)]
+enum InputFile {
+    Page(PathBuf),
+    File(PathBuf),
+    Dir(PathBuf),
 }
 
 fn is_page(entry: &DirEntry) -> bool {
@@ -15,12 +23,12 @@ fn is_page(entry: &DirEntry) -> bool {
     !filename_lossy.starts_with('_') && filename_lossy.ends_with(".html.jinja")
 }
 
-fn get_pages(base_dir: &Path) -> Vec<PathBuf> {
+fn get_input_files(base_dir: &Path) -> Vec<InputFile> {
     let mut pages = vec![];
     for member in fs::read_dir(base_dir).unwrap() {
         let entry = member.unwrap();
         if is_page(&entry) {
-            pages.push(entry.path());
+            pages.push(InputFile::Page(entry.path()));
         }
     }
     pages
@@ -44,19 +52,28 @@ fn init_jinja_env(templates_dir: &Path) -> Environment {
     env
 }
 
+fn render_page(env: &Environment, output_dir: &Path, file: &Path) -> Result<(), Error> {
+    let output_path = to_output_path(output_dir, &file);
+    let mut output_file = File::create(output_path).map_err(Error::Io)?;
+    let filename = file.file_name().unwrap().to_string_lossy();
+    let tmpl = env.get_template(&filename).unwrap();
+    tmpl.render_to_write(context!(), &mut output_file).unwrap();
+    println!("Output file: {output_file:?}");
+    Ok(())
+}
+
 fn main() -> Result<(), Error> {
     let input_dir = Path::new("/home/vineet/code/metropolis/website");
     let output_dir = Path::new("/home/vineet/code/metropolis/website/dist");
     ensure_output_dir(output_dir)?;
     let env = init_jinja_env(input_dir);
-    let pages = get_pages(&Path::new(input_dir));
-    for file in pages {
-        let output_path = to_output_path(output_dir, &file);
-        let mut output_file = File::create(output_path).map_err(Error::Io)?;
-        let filename = file.file_name().unwrap().to_string_lossy();
-        let tmpl = env.get_template(&filename).unwrap();
-        tmpl.render_to_write(context!(), &mut output_file).unwrap();
-        println!("Output file: {output_file:?}");
+    let input_files = get_input_files(&Path::new(input_dir));
+    for file in input_files {
+        match file {
+            InputFile::Page(path) => render_page(&env, &output_dir, &path)?,
+            InputFile::File(_) => todo!(),
+            InputFile::Dir(_) => todo!(),
+        }
     }
     Ok(())
 }
