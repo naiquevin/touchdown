@@ -26,7 +26,7 @@ fn must_skip(filename: &str) -> bool {
 }
 
 fn get_input_files(base_dir: &Path) -> Result<Vec<InputFile>, Error> {
-    let mut pages = vec![];
+    let mut result = vec![];
     for member in fs::read_dir(base_dir).map_err(Error::Io)? {
         let entry = member.map_err(Error::Io)?;
         let filename = entry.file_name();
@@ -38,10 +38,21 @@ fn get_input_files(base_dir: &Path) -> Result<Vec<InputFile>, Error> {
             continue;
         }
         if is_page(&filename_lossy) {
-            pages.push(InputFile::Page(entry.path()));
+            result.push(InputFile::Page(entry.path()));
+        } else {
+            let filetype = entry.file_type().map_err(Error::Io)?;
+            if filetype.is_dir() {
+                result.push(InputFile::Dir(entry.path()));
+            } else if filetype.is_file() {
+                result.push(InputFile::File(entry.path()));
+            } else {
+                // It's a symlink. Not sure how to handle it so skip
+                // it for now
+                continue;
+            }
         }
     }
-    Ok(pages)
+    Ok(result)
 }
 
 fn ensure_output_dir(dir: &Path) -> Result<(), Error> {
@@ -81,8 +92,12 @@ fn main() -> Result<(), Error> {
     for file in input_files {
         match file {
             InputFile::Page(path) => render_page(&env, &output_dir, &path)?,
-            InputFile::File(_) => todo!(),
-            InputFile::Dir(_) => todo!(),
+            InputFile::File(path) => {
+                println!("Copying file to be implemented: {}", path.display())
+            },
+            InputFile::Dir(path) => {
+                println!("Copying dir to be implemented: {}", path.display())
+            },
         }
     }
     Ok(())
