@@ -79,7 +79,24 @@ fn render_page(env: &Environment, output_dir: &Path, file: &Path) -> Result<(), 
     let filename = file.file_name().unwrap().to_string_lossy();
     let tmpl = env.get_template(&filename).unwrap();
     tmpl.render_to_write(context!(), &mut output_file).unwrap();
-    println!("Output file: {output_file:?}");
+    println!("Rendered template to file: {output_file:?}");
+    Ok(())
+}
+
+fn copy_dir_recursive(src: &Path, output_dir: &Path) -> io::Result<()> {
+    let dir_name = src.file_name().unwrap();
+    let dst = output_dir.join(dir_name);
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_recursive(&entry.path(), &dst)?;
+        } else {
+            fs::copy(entry.path(), dst.join(entry.file_name()))?;
+        }
+    }
+    println!("Copied dir recursively: {}", dst.display());
     Ok(())
 }
 
@@ -95,9 +112,7 @@ fn main() -> Result<(), Error> {
             InputFile::File(path) => {
                 println!("Copying file to be implemented: {}", path.display())
             },
-            InputFile::Dir(path) => {
-                println!("Copying dir to be implemented: {}", path.display())
-            },
+            InputFile::Dir(path) => copy_dir_recursive(&path, &output_dir).map_err(Error::Io)?,
         }
     }
     Ok(())
