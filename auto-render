@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+SRC_DIR=$1
+
+while inotifywait -e close_write $SRC_DIR; do
+    cargo run;
+done
+
