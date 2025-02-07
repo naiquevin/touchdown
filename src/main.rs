@@ -7,6 +7,7 @@ use std::fs::{self, File};
 #[derive(Debug)]
 enum Error {
     Io(io::Error),
+    Minijinja(minijinja::Error),
 }
 
 #[allow(unused)]
@@ -70,6 +71,7 @@ fn ensure_output_dir(dir: &Path) -> Result<(), Error> {
 }
 
 fn to_output_path(output_dir: &Path, input_path: &Path) -> PathBuf {
+    // @NOTE: Safe to use unwrap here as input_path has been vetted
     output_dir.join(input_path.file_stem().unwrap())
 }
 
@@ -82,14 +84,16 @@ fn init_jinja_env(templates_dir: &Path) -> Environment {
 fn render_page(env: &Environment, output_dir: &Path, file: &Path) -> Result<(), Error> {
     let output_path = to_output_path(output_dir, &file);
     let mut output_file = File::create(output_path).map_err(Error::Io)?;
+    // @NOTE: Safe to use unwrap here as the file path has been vetted
     let filename = file.file_name().unwrap().to_string_lossy();
-    let tmpl = env.get_template(&filename).unwrap();
-    tmpl.render_to_write(context!(), &mut output_file).unwrap();
+    let tmpl = env.get_template(&filename).map_err(Error::Minijinja)?;
+    tmpl.render_to_write(context!(), &mut output_file).map_err(Error::Minijinja)?;
     println!("Rendered template to file: {output_file:?}");
     Ok(())
 }
 
 fn copy_dir_recursive(src: &Path, output_dir: &Path) -> io::Result<()> {
+    // @NOTE: Safe to use unwrap here as the file path has been vetted
     let dir_name = src.file_name().unwrap();
     let dst = output_dir.join(dir_name);
     fs::create_dir_all(&dst)?;
@@ -107,6 +111,7 @@ fn copy_dir_recursive(src: &Path, output_dir: &Path) -> io::Result<()> {
 }
 
 fn copy_file(src: &Path, output_dir: &Path) -> io::Result<()> {
+    // @NOTE: Safe to use unwrap here as the file path has been vetted
     let filename = src.file_name().unwrap();
     let dst = output_dir.join(filename);
     fs::copy(src, &dst)?;
