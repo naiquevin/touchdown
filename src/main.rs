@@ -1,6 +1,6 @@
 use minijinja::{context, path_loader, Environment};
 use std::path::{Path, PathBuf};
-use std::io;
+use std::{env, io};
 use std::fs::{self, File};
 
 #[allow(unused)]
@@ -115,9 +115,10 @@ fn copy_file(src: &Path, output_dir: &Path) -> io::Result<()> {
 }
 
 fn main() -> Result<(), Error> {
-    let input_dir = Path::new("/home/vineet/code/metropolis/website");
-    let output_dir = Path::new("/home/vineet/code/metropolis/website/dist");
-    ensure_output_dir(output_dir)?;
+    let args: Vec<String> = env::args().collect();
+    let input_dir = Path::new(&args[1]);
+    let output_dir = input_dir.join("dist");
+    ensure_output_dir(&output_dir)?;
     let env = init_jinja_env(input_dir);
     let input_files = get_input_files(&Path::new(input_dir))?;
     for file in input_files {

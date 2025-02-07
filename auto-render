@@ -3,6 +3,6 @@
 SRC_DIR=$1
 
 while inotifywait -e close_write $SRC_DIR; do
-    cargo run;
+    cargo run $SRC_DIR;
 done
 
