@@ -1,13 +1,23 @@
 use minijinja::{context, path_loader, Environment};
+use core::fmt;
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
-use std::{env, io};
+use std::{env, io, process};
 use std::fs::{self, File};
 
-#[allow(unused)]
 #[derive(Debug)]
 enum Error {
     Io(io::Error),
     Minijinja(minijinja::Error),
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Io(e) => write!(f, "IO error: {e}"),
+            Self::Minijinja(e) => write!(f, "Minijinja error: {e}")
+        }
+    }
 }
 
 #[allow(unused)]
@@ -119,13 +129,11 @@ fn copy_file(src: &Path, output_dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
-fn main() -> Result<(), Error> {
-    let args: Vec<String> = env::args().collect();
-    let input_dir = Path::new(&args[1]);
-    let output_dir = input_dir.join("dist");
+fn generate_site(src: &Path) -> Result<(), Error> {
+    let output_dir = src.join("dist");
     ensure_output_dir(&output_dir)?;
-    let env = init_jinja_env(input_dir);
-    let input_files = get_input_files(&Path::new(input_dir))?;
+    let env = init_jinja_env(src);
+    let input_files = get_input_files(&Path::new(src))?;
     for file in input_files {
         match file {
             InputFile::Page(path) => render_page(&env, &output_dir, &path)?,
@@ -134,4 +142,16 @@ fn main() -> Result<(), Error> {
         }
     }
     Ok(())
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let src = Path::new(&args[1]);
+    match generate_site(src) {
+        Ok(_) => process::exit(0),
+        Err(e) => {
+            eprintln!("{e}");
+            process::exit(1);
+        }
+    }
 }
