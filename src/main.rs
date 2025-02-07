@@ -10,6 +10,7 @@ enum Error {
 }
 
 #[allow(unused)]
+#[derive(Debug)]
 enum InputFile {
     Page(PathBuf),
     File(PathBuf),
@@ -100,6 +101,14 @@ fn copy_dir_recursive(src: &Path, output_dir: &Path) -> io::Result<()> {
     Ok(())
 }
 
+fn copy_file(src: &Path, output_dir: &Path) -> io::Result<()> {
+    let filename = src.file_name().unwrap();
+    let dst = output_dir.join(filename);
+    fs::copy(src, &dst)?;
+    println!("Copied file: {}", dst.display());
+    Ok(())
+}
+
 fn main() -> Result<(), Error> {
     let input_dir = Path::new("/home/vineet/code/metropolis/website");
     let output_dir = Path::new("/home/vineet/code/metropolis/website/dist");
@@ -109,9 +118,7 @@ fn main() -> Result<(), Error> {
     for file in input_files {
         match file {
             InputFile::Page(path) => render_page(&env, &output_dir, &path)?,
-            InputFile::File(path) => {
-                println!("Copying file to be implemented: {}", path.display())
-            },
+            InputFile::File(path) => copy_file(&path, &output_dir).map_err(Error::Io)?,
             InputFile::Dir(path) => copy_dir_recursive(&path, &output_dir).map_err(Error::Io)?,
         }
     }
