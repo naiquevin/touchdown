@@ -1,9 +1,9 @@
-use minijinja::{context, path_loader, Environment};
 use core::fmt;
+use minijinja::{context, path_loader, Environment};
 use std::fmt::Display;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::{env, io, process};
-use std::fs::{self, File};
 
 #[derive(Debug)]
 enum Error {
@@ -15,12 +15,11 @@ impl Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Io(e) => write!(f, "IO error: {e}"),
-            Self::Minijinja(e) => write!(f, "Minijinja error: {e}")
+            Self::Minijinja(e) => write!(f, "Minijinja error: {e}"),
         }
     }
 }
 
-#[allow(unused)]
 #[derive(Debug)]
 enum InputFile {
     Page(PathBuf),
@@ -97,7 +96,8 @@ fn render_page(env: &Environment, output_dir: &Path, file: &Path) -> Result<(), 
     // @NOTE: Safe to use unwrap here as the file path has been vetted
     let filename = file.file_name().unwrap().to_string_lossy();
     let tmpl = env.get_template(&filename).map_err(Error::Minijinja)?;
-    tmpl.render_to_write(context!(), &mut output_file).map_err(Error::Minijinja)?;
+    tmpl.render_to_write(context!(), &mut output_file)
+        .map_err(Error::Minijinja)?;
     println!("Rendered template to file: {output_file:?}");
     Ok(())
 }
