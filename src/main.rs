@@ -46,10 +46,15 @@ fn get_input_files(base_dir: &Path) -> Result<Vec<InputFile>, Error> {
                 result.push(InputFile::Dir(entry.path()));
             } else if filetype.is_file() {
                 result.push(InputFile::File(entry.path()));
-            } else {
-                // It's a symlink. Not sure how to handle it so skip
-                // it for now
-                continue;
+            } else if filetype.is_symlink() {
+                let target = entry.path().canonicalize().map_err(Error::Io)?;
+                if target.is_file() {
+                    result.push(InputFile::File(target));
+                } else if target.is_dir() {
+                    result.push(InputFile::Dir(target));
+                } else {
+                    panic!("unexpected condition met");
+                }
             }
         }
     }
