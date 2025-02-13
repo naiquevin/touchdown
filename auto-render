@@ -2,6 +2,8 @@
 
 SRC_DIR=$1
 
+cargo run $SRC_DIR;
+
 while inotifywait -e close_write $SRC_DIR; do
     cargo run $SRC_DIR;
 done
