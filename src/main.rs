@@ -40,6 +40,7 @@ fn must_skip(filename: &str) -> bool {
     filename.starts_with(".git")       // the git repo, .gitignore etc. files
         || filename == "dist"          // the output directory
         || filename.ends_with('~')     // emacs backup files
+        || filename.ends_with('#')     // emacs tmp files
         || filename.starts_with('_') // included jinja templates
 }
 
