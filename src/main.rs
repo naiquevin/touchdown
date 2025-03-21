@@ -31,14 +31,21 @@ impl Display for Error {
 }
 
 #[derive(Debug)]
-enum InputFile {
-    Page(PathBuf),
+enum InputPath {
+    /// An HTML template to be rendered using minijinja into
+    /// the output dir
+    HtmlTemplate(PathBuf),
+    /// A file that to be copied into the output dir as it is
     File(PathBuf),
+    /// A directory to be copied into the output dir as it is,
+    /// recursively
     Dir(PathBuf),
+    /// A javascript module to be built using `npm` and the built
+    /// bundle to be copied into the output dir
     JsModule(PathBuf),
 }
 
-fn is_page(filename: &str) -> bool {
+fn is_html_template(filename: &str) -> bool {
     filename.ends_with(".html.jinja")
 }
 
@@ -71,7 +78,7 @@ fn is_js_module(path: &Path) -> Result<bool, Error> {
 
 
 
-fn get_input_files(base_dir: &Path) -> Result<Vec<InputFile>, Error> {
+fn get_input_files(base_dir: &Path) -> Result<Vec<InputPath>, Error> {
     let mut result = vec![];
     for member in fs::read_dir(base_dir).map_err(Error::Io)? {
         let entry = member.map_err(Error::Io)?;
@@ -83,20 +90,20 @@ fn get_input_files(base_dir: &Path) -> Result<Vec<InputFile>, Error> {
             // println!("Ignoring entry: {entry:?}");
             continue;
         }
-        if is_page(&filename_lossy) {
-            result.push(InputFile::Page(entry.path()));
+        if is_html_template(&filename_lossy) {
+            result.push(InputPath::HtmlTemplate(entry.path()));
         } else {
             let filetype = entry.file_type().map_err(Error::Io)?;
             if filetype.is_dir() {
                 if is_js_module(&entry.path())? {
-                    result.push(InputFile::JsModule(entry.path()));
+                    result.push(InputPath::JsModule(entry.path()));
                 } else {
                     for nested_file in get_input_files(&entry.path())? {
                         result.push(nested_file);
                     }
                 }
             } else if filetype.is_file() {
-                result.push(InputFile::File(entry.path()));
+                result.push(InputPath::File(entry.path()));
             } else if filetype.is_symlink() {
                 let target = entry.path().canonicalize().map_err(Error::Io)?;
                 // @NOTE: Here we're checking whether the symlink
@@ -106,9 +113,9 @@ fn get_input_files(base_dir: &Path) -> Result<Vec<InputFile>, Error> {
                 // symlink path to be able to find path relative to
                 // the src/input dir.
                 if target.is_file() {
-                    result.push(InputFile::File(entry.path()));
+                    result.push(InputPath::File(entry.path()));
                 } else if target.is_dir() {
-                    result.push(InputFile::Dir(entry.path()));
+                    result.push(InputPath::Dir(entry.path()));
                 } else {
                     panic!("unexpected condition met");
                 }
@@ -241,10 +248,10 @@ fn generate_site(src_dir: &Path) -> Result<(), Error> {
     let input_files = get_input_files(&Path::new(src_dir))?;
     for file in input_files {
         match file {
-            InputFile::Page(path) => render_page(&env, &path, &output_dir, &src_dir)?,
-            InputFile::File(path) => copy_file(&path, &output_dir, &src_dir)?,
-            InputFile::Dir(path) => copy_dir_recursive(&path, &output_dir, &src_dir)?,
-            InputFile::JsModule(path) => build_js_module(&path, &output_dir)?,
+            InputPath::HtmlTemplate(path) => render_page(&env, &path, &output_dir, &src_dir)?,
+            InputPath::File(path) => copy_file(&path, &output_dir, &src_dir)?,
+            InputPath::Dir(path) => copy_dir_recursive(&path, &output_dir, &src_dir)?,
+            InputPath::JsModule(path) => build_js_module(&path, &output_dir)?,
         }
     }
     Ok(())
