@@ -5,6 +5,8 @@ use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::{env, io, process};
 
+const OUTPUT_DIRNAME: &'static str = "dist";
+
 #[derive(Debug)]
 enum Error {
     Io(io::Error),
@@ -38,10 +40,10 @@ fn is_page(filename: &str) -> bool {
 // @TODO: Allow user specified exclusions
 fn must_skip(filename: &str) -> bool {
     filename.starts_with(".git")       // the git repo, .gitignore etc. files
-        || filename == "dist"          // the output directory
+        || filename == OUTPUT_DIRNAME  // the output directory
         || filename.ends_with('~')     // emacs backup files
         || filename.ends_with('#')     // emacs tmp files
-        || filename.starts_with('_') // included jinja templates
+        || filename.starts_with('_')   // included jinja templates
 }
 
 fn get_input_files(base_dir: &Path) -> Result<Vec<InputFile>, Error> {
@@ -176,7 +178,7 @@ fn copy_file(path: &Path, output_dir: &Path, src_dir: &Path) -> Result<(), Error
 }
 
 fn generate_site(src_dir: &Path) -> Result<(), Error> {
-    let output_dir = src_dir.join("dist");
+    let output_dir = src_dir.join(OUTPUT_DIRNAME);
     ensure_dir(&output_dir).map_err(Error::Io)?;
     let env = init_jinja_env(src_dir);
     let input_files = get_input_files(&Path::new(src_dir))?;
