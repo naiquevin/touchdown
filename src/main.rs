@@ -1,13 +1,13 @@
 use core::fmt;
-use std::process::Command;
 use minijinja::{context, path_loader, Environment};
 use std::fmt::Display;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::{env, io, process};
 
-const OUTPUT_DIRNAME: &'static str = "dist";
-const JS_DIRNAME: &'static str = "javascript";
+const OUTPUT_DIRNAME: &str = "dist";
+const JS_DIRNAME: &str = "javascript";
 
 #[derive(Debug)]
 enum Error {
@@ -55,7 +55,7 @@ fn must_skip(filename: &str) -> bool {
         || filename == OUTPUT_DIRNAME  // the output directory
         || filename.ends_with('~')     // emacs backup files
         || filename.ends_with('#')     // emacs tmp files
-        || filename.starts_with('_')   // included jinja templates
+        || filename.starts_with('_') // included jinja templates
 }
 
 /// Checks if a path is a javascript module that needs to be built.
@@ -63,20 +63,16 @@ fn must_skip(filename: &str) -> bool {
 /// The criteria is that the directory must be named `JS_DIRNAME` and
 /// must contain package.json file inside it.
 fn is_js_module(path: &Path) -> Result<bool, Error> {
-    let filename = path
-        .file_name()
-        .ok_or(Error::Unexpected(format!("No filename: {}", path.display())))?;
+    let filename = path.file_name().ok_or(Error::Unexpected(format!(
+        "No filename: {}",
+        path.display()
+    )))?;
     if filename != JS_DIRNAME {
-        return Ok(false)
+        return Ok(false);
     }
-    let pkg_json_exists = path
-        .join("package.json")
-        .try_exists()
-        .map_err(Error::Io)?;
+    let pkg_json_exists = path.join("package.json").try_exists().map_err(Error::Io)?;
     Ok(pkg_json_exists)
 }
-
-
 
 fn get_input_files(base_dir: &Path) -> Result<Vec<InputPath>, Error> {
     let mut result = vec![];
@@ -177,7 +173,8 @@ fn render_page(
     let output_path = to_output_path(src_dir, output_dir, path)?;
     ensure_parent_dir(&output_path)?;
     let mut output_file = File::create(output_path).map_err(Error::Io)?;
-    let tmpl_path = path.strip_prefix(src_dir)
+    let tmpl_path = path
+        .strip_prefix(src_dir)
         .map_err(Error::StripPrefix)?
         .to_string_lossy();
     let tmpl = env.get_template(&tmpl_path).map_err(Error::Minijinja)?;
@@ -229,7 +226,7 @@ fn build_js_module(path: &Path, output_dir: &Path) -> Result<(), Error> {
     if status.success() {
         let output_js_dir = output_dir.join(JS_DIRNAME);
         ensure_dir(&output_js_dir).map_err(Error::Io)?;
-        for filename in vec!["main.js", "main.js.map"] {
+        for filename in ["main.js", "main.js.map"] {
             let src = path.join("public").join(filename);
             let dst = output_dir.join(JS_DIRNAME).join(filename);
             fs::copy(src, &dst).map_err(Error::Io)?;
@@ -245,12 +242,12 @@ fn generate_site(src_dir: &Path) -> Result<(), Error> {
     let output_dir = src_dir.join(OUTPUT_DIRNAME);
     ensure_dir(&output_dir).map_err(Error::Io)?;
     let env = init_jinja_env(src_dir);
-    let input_files = get_input_files(&Path::new(src_dir))?;
+    let input_files = get_input_files(Path::new(src_dir))?;
     for file in input_files {
         match file {
-            InputPath::HtmlTemplate(path) => render_page(&env, &path, &output_dir, &src_dir)?,
-            InputPath::File(path) => copy_file(&path, &output_dir, &src_dir)?,
-            InputPath::Dir(path) => copy_dir_recursive(&path, &output_dir, &src_dir)?,
+            InputPath::HtmlTemplate(path) => render_page(&env, &path, &output_dir, src_dir)?,
+            InputPath::File(path) => copy_file(&path, &output_dir, src_dir)?,
+            InputPath::Dir(path) => copy_dir_recursive(&path, &output_dir, src_dir)?,
             InputPath::JsModule(path) => build_js_module(&path, &output_dir)?,
         }
     }
