@@ -1,4 +1,5 @@
 use core::fmt;
+use std::process::Command;
 use minijinja::{context, path_loader, Environment};
 use std::fmt::Display;
 use std::fs::{self, File};
@@ -6,12 +7,14 @@ use std::path::{Path, PathBuf};
 use std::{env, io, process};
 
 const OUTPUT_DIRNAME: &'static str = "dist";
+const JS_DIRNAME: &'static str = "javascript";
 
 #[derive(Debug)]
 enum Error {
     Io(io::Error),
     Minijinja(minijinja::Error),
     StripPrefix(std::path::StripPrefixError),
+    Npm,
     Unexpected(String),
 }
 
@@ -21,6 +24,7 @@ impl Display for Error {
             Self::Io(e) => write!(f, "IO error: {e}"),
             Self::Minijinja(e) => write!(f, "Minijinja error: {e}"),
             Self::StripPrefix(e) => write!(f, "StripPrefixError: {e}"),
+            Self::Npm => write!(f, "Error when running the 'npm' command"),
             Self::Unexpected(e) => write!(f, "Unexpected error: {e}"),
         }
     }
@@ -31,6 +35,7 @@ enum InputFile {
     Page(PathBuf),
     File(PathBuf),
     Dir(PathBuf),
+    JsModule(PathBuf),
 }
 
 fn is_page(filename: &str) -> bool {
@@ -45,6 +50,26 @@ fn must_skip(filename: &str) -> bool {
         || filename.ends_with('#')     // emacs tmp files
         || filename.starts_with('_')   // included jinja templates
 }
+
+/// Checks if a path is a javascript module that needs to be built.
+///
+/// The criteria is that the directory must be named `JS_DIRNAME` and
+/// must contain package.json file inside it.
+fn is_js_module(path: &Path) -> Result<bool, Error> {
+    let filename = path
+        .file_name()
+        .ok_or(Error::Unexpected(format!("No filename: {}", path.display())))?;
+    if filename != JS_DIRNAME {
+        return Ok(false)
+    }
+    let pkg_json_exists = path
+        .join("package.json")
+        .try_exists()
+        .map_err(Error::Io)?;
+    Ok(pkg_json_exists)
+}
+
+
 
 fn get_input_files(base_dir: &Path) -> Result<Vec<InputFile>, Error> {
     let mut result = vec![];
@@ -63,8 +88,12 @@ fn get_input_files(base_dir: &Path) -> Result<Vec<InputFile>, Error> {
         } else {
             let filetype = entry.file_type().map_err(Error::Io)?;
             if filetype.is_dir() {
-                for nested_file in get_input_files(&entry.path())? {
-                    result.push(nested_file);
+                if is_js_module(&entry.path())? {
+                    result.push(InputFile::JsModule(entry.path()));
+                } else {
+                    for nested_file in get_input_files(&entry.path())? {
+                        result.push(nested_file);
+                    }
                 }
             } else if filetype.is_file() {
                 result.push(InputFile::File(entry.path()));
@@ -177,6 +206,34 @@ fn copy_file(path: &Path, output_dir: &Path, src_dir: &Path) -> Result<(), Error
     Ok(())
 }
 
+/// Builds a js module inside the source dir by shelling out to
+/// `npm`. Assumes that:
+///
+///   1. the js file is built inside a subdir named `public`
+///   2. the bundle file is named `main.js` and
+///   3. has an associated source map `main.js.map`
+fn build_js_module(path: &Path, output_dir: &Path) -> Result<(), Error> {
+    println!("Executing command: npm run build");
+    let status = Command::new("npm")
+        .current_dir(path)
+        .args(["run", "build"])
+        .status()
+        .map_err(Error::Io)?;
+    if status.success() {
+        let output_js_dir = output_dir.join(JS_DIRNAME);
+        ensure_dir(&output_js_dir).map_err(Error::Io)?;
+        for filename in vec!["main.js", "main.js.map"] {
+            let src = path.join("public").join(filename);
+            let dst = output_dir.join(JS_DIRNAME).join(filename);
+            fs::copy(src, &dst).map_err(Error::Io)?;
+            println!("Copied built js file: {}", dst.display());
+        }
+        Ok(())
+    } else {
+        Err(Error::Npm)
+    }
+}
+
 fn generate_site(src_dir: &Path) -> Result<(), Error> {
     let output_dir = src_dir.join(OUTPUT_DIRNAME);
     ensure_dir(&output_dir).map_err(Error::Io)?;
@@ -187,6 +244,7 @@ fn generate_site(src_dir: &Path) -> Result<(), Error> {
             InputFile::Page(path) => render_page(&env, &path, &output_dir, &src_dir)?,
             InputFile::File(path) => copy_file(&path, &output_dir, &src_dir)?,
             InputFile::Dir(path) => copy_dir_recursive(&path, &output_dir, &src_dir)?,
+            InputFile::JsModule(path) => build_js_module(&path, &output_dir)?,
         }
     }
     Ok(())
