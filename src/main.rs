@@ -158,7 +158,7 @@ fn to_output_path(src_dir: &Path, output_dir: &Path, input_path: &Path) -> Resul
     Ok(output_path)
 }
 
-fn init_jinja_env(templates_dir: &Path) -> Environment {
+fn init_jinja_env(templates_dir: &Path) -> Environment<'_> {
     let mut env = Environment::new();
     env.set_loader(path_loader(templates_dir));
     env
