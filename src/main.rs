@@ -1,7 +1,8 @@
 use core::fmt;
 use env_logger::WriteStyle;
-use log::{LevelFilter, error, info};
+use log::{LevelFilter, error, info, warn};
 use minijinja::{context, path_loader, Environment};
+use serde::Serialize;
 use std::fmt::Display;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
@@ -42,6 +43,41 @@ impl Display for Error {
             Self::Npm => write!(f, "Error when running the 'npm' command"),
             Self::Unexpected(e) => write!(f, "Unexpected error: {e}"),
         }
+    }
+}
+
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum BuildTarget {
+    #[default]
+    Develop,
+    Release,
+}
+
+impl Display for BuildTarget {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Develop => write!(f, "develop"),
+            Self::Release => write!(f, "release"),
+        }
+    }
+}
+
+impl BuildTarget {
+    fn discover() -> Self {
+        env::var("TOUCHDOWN_TARGET")
+            .map(|s| match s.as_str() {
+                "develop" => Self::Develop,
+                "release" => Self::Release,
+                _ => {
+                    warn!("Invalid build target; Defaulting to 'develop'");
+                    Self::default()
+                }
+            })
+            .unwrap_or_else(|_| {
+                warn!("Env var 'TOUCHDOWN_TARGET' not set; Defaulting to 'develop'");
+                Self::default()
+            })
     }
 }
 
@@ -181,6 +217,7 @@ fn init_jinja_env(templates_dir: &Path) -> Environment<'_> {
 
 fn render_page(
     env: &Environment,
+    build_target: &BuildTarget,
     path: &Path,
     output_dir: &Path,
     src_dir: &Path,
@@ -193,7 +230,10 @@ fn render_page(
         .map_err(Error::StripPrefix)?
         .to_string_lossy();
     let tmpl = env.get_template(&tmpl_path).map_err(Error::Minijinja)?;
-    tmpl.render_captured_to(context!(), &mut output_file)
+    let ctx = context!(
+        build_target
+    );
+    tmpl.render_captured_to(ctx, &mut output_file)
         .map_err(Error::Minijinja)?;
     info!("Rendered template to file: {}", output_path.display());
     Ok(())
@@ -253,14 +293,14 @@ fn build_js_module(path: &Path, output_dir: &Path) -> Result<(), Error> {
     }
 }
 
-fn generate_site(src_dir: &Path) -> Result<(), Error> {
+fn generate_site(build_target: &BuildTarget, src_dir: &Path) -> Result<(), Error> {
     let output_dir = src_dir.join(OUTPUT_DIRNAME);
     ensure_dir(&output_dir).map_err(Error::Io)?;
     let env = init_jinja_env(src_dir);
     let input_files = get_input_files(Path::new(src_dir))?;
     for file in input_files {
         match file {
-            InputPath::HtmlTemplate(path) => render_page(&env, &path, &output_dir, src_dir)?,
+            InputPath::HtmlTemplate(path) => render_page(&env, &build_target, &path, &output_dir, src_dir)?,
             InputPath::File(path) => copy_file(&path, &output_dir, src_dir)?,
             InputPath::Dir(path) => copy_dir_recursive(&path, &output_dir, src_dir)?,
             InputPath::JsModule(path) => build_js_module(&path, &output_dir)?,
@@ -272,8 +312,10 @@ fn generate_site(src_dir: &Path) -> Result<(), Error> {
 fn main() {
     let args: Vec<String> = env::args().collect();
     setup_logging(1);
+    let build_target = BuildTarget::discover();
+    info!("Build Target: {build_target}");
     let src = Path::new(&args[1]);
-    match generate_site(src) {
+    match generate_site(&build_target, src) {
         Ok(_) => process::exit(0),
         Err(e) => {
             error!("{e}");
