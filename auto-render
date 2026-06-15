@@ -1,10 +1,23 @@
 #!/usr/bin/env bash
 
+set -e
+
 SRC_DIR=$1
+
+export TOUCHDOWN_TARGET=develop
 
 cargo run $SRC_DIR;
 
-while inotifywait -r -e close_write $SRC_DIR; do
+# Watched events:
+#
+#  - a watched file is closed after writing
+#  - a new file is created
+#  - file is deleted
+#  - file is moved (both in and out of the watched dir)
+#
+# Note: Hidden files (prefixed with a .) are not watched
+#
+while inotifywait -r -e close_write -e move -e create -e delete --exclude '/\.' $SRC_DIR; do
     cargo run $SRC_DIR;
 done
 
