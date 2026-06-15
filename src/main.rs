@@ -1,4 +1,6 @@
 use core::fmt;
+use env_logger::WriteStyle;
+use log::{LevelFilter, error, info};
 use minijinja::{context, path_loader, Environment};
 use std::fmt::Display;
 use std::fs::{self, File};
@@ -8,6 +10,19 @@ use std::{env, io, process};
 
 const OUTPUT_DIRNAME: &str = "dist";
 const JS_DIRNAME: &str = "javascript";
+
+pub fn setup_logging(verbosity: u8) {
+    let level = match verbosity {
+        0 => LevelFilter::Warn,
+        1 => LevelFilter::Info,
+        2 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
+    };
+    env_logger::Builder::new()
+        .filter(None, level)
+        .write_style(WriteStyle::Always)
+        .init();
+}
 
 #[derive(Debug)]
 enum Error {
@@ -172,7 +187,7 @@ fn render_page(
 ) -> Result<(), Error> {
     let output_path = to_output_path(src_dir, output_dir, path)?;
     ensure_parent_dir(&output_path)?;
-    let mut output_file = File::create(output_path).map_err(Error::Io)?;
+    let mut output_file = File::create(&output_path).map_err(Error::Io)?;
     let tmpl_path = path
         .strip_prefix(src_dir)
         .map_err(Error::StripPrefix)?
@@ -180,7 +195,7 @@ fn render_page(
     let tmpl = env.get_template(&tmpl_path).map_err(Error::Minijinja)?;
     tmpl.render_to_write(context!(), &mut output_file)
         .map_err(Error::Minijinja)?;
-    println!("Rendered template to file: {output_file:?}");
+    info!("Rendered template to file: {}", output_path.display());
     Ok(())
 }
 
@@ -198,7 +213,7 @@ fn copy_dir_recursive(path: &Path, output_dir: &Path, src_dir: &Path) -> Result<
             fs::copy(entry.path(), dst.join(entry.file_name())).map_err(Error::Io)?;
         }
     }
-    println!("Copied dir recursively: {}", dst.display());
+    info!("Copied dir recursively: {}", dst.display());
     Ok(())
 }
 
@@ -206,7 +221,7 @@ fn copy_file(path: &Path, output_dir: &Path, src_dir: &Path) -> Result<(), Error
     let dst = to_output_path(src_dir, output_dir, path)?;
     ensure_parent_dir(&dst)?;
     fs::copy(path, &dst).map_err(Error::Io)?;
-    println!("Copied file: {}", dst.display());
+    info!("Copied file: {}", dst.display());
     Ok(())
 }
 
@@ -217,7 +232,7 @@ fn copy_file(path: &Path, output_dir: &Path, src_dir: &Path) -> Result<(), Error
 ///   2. the bundle file is named `main.js` and
 ///   3. has an associated source map `main.js.map`
 fn build_js_module(path: &Path, output_dir: &Path) -> Result<(), Error> {
-    println!("Executing command: npm run build");
+    info!("Executing command: npm run build");
     let status = Command::new("npm")
         .current_dir(path)
         .args(["run", "build"])
@@ -230,7 +245,7 @@ fn build_js_module(path: &Path, output_dir: &Path) -> Result<(), Error> {
             let src = path.join("public").join(filename);
             let dst = output_dir.join(JS_DIRNAME).join(filename);
             fs::copy(src, &dst).map_err(Error::Io)?;
-            println!("Copied built js file: {}", dst.display());
+            info!("Copied built js file: {}", dst.display());
         }
         Ok(())
     } else {
@@ -256,11 +271,12 @@ fn generate_site(src_dir: &Path) -> Result<(), Error> {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    setup_logging(1);
     let src = Path::new(&args[1]);
     match generate_site(src) {
         Ok(_) => process::exit(0),
         Err(e) => {
-            eprintln!("{e}");
+            error!("{e}");
             process::exit(1);
         }
     }
