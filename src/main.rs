@@ -1,6 +1,6 @@
 use core::fmt;
 use env_logger::WriteStyle;
-use log::{LevelFilter, error, info, warn};
+use log::{error, info, warn, LevelFilter};
 use minijinja::{context, path_loader, Environment};
 use serde::Serialize;
 use std::fmt::Display;
@@ -230,9 +230,7 @@ fn render_page(
         .map_err(Error::StripPrefix)?
         .to_string_lossy();
     let tmpl = env.get_template(&tmpl_path).map_err(Error::Minijinja)?;
-    let ctx = context!(
-        build_target
-    );
+    let ctx = context!(build_target);
     tmpl.render_captured_to(ctx, &mut output_file)
         .map_err(Error::Minijinja)?;
     info!("Rendered template to file: {}", output_path.display());
@@ -293,17 +291,22 @@ fn build_js_module(path: &Path, output_dir: &Path) -> Result<(), Error> {
     }
 }
 
-fn generate_site(build_target: &BuildTarget, src_dir: &Path) -> Result<(), Error> {
-    let output_dir = src_dir.join(OUTPUT_DIRNAME);
-    ensure_dir(&output_dir).map_err(Error::Io)?;
+fn generate_site(
+    build_target: &BuildTarget,
+    src_dir: &Path,
+    output_dir: &Path,
+) -> Result<(), Error> {
+    ensure_dir(output_dir).map_err(Error::Io)?;
     let env = init_jinja_env(src_dir);
     let input_files = get_input_files(Path::new(src_dir))?;
     for file in input_files {
         match file {
-            InputPath::HtmlTemplate(path) => render_page(&env, &build_target, &path, &output_dir, src_dir)?,
-            InputPath::File(path) => copy_file(&path, &output_dir, src_dir)?,
-            InputPath::Dir(path) => copy_dir_recursive(&path, &output_dir, src_dir)?,
-            InputPath::JsModule(path) => build_js_module(&path, &output_dir)?,
+            InputPath::HtmlTemplate(path) => {
+                render_page(&env, build_target, &path, output_dir, src_dir)?
+            }
+            InputPath::File(path) => copy_file(&path, output_dir, src_dir)?,
+            InputPath::Dir(path) => copy_dir_recursive(&path, output_dir, src_dir)?,
+            InputPath::JsModule(path) => build_js_module(&path, output_dir)?,
         }
     }
     Ok(())
@@ -314,8 +317,11 @@ fn main() {
     setup_logging(1);
     let build_target = BuildTarget::discover();
     info!("Build Target: {build_target}");
-    let src = Path::new(&args[1]);
-    match generate_site(&build_target, src) {
+    let src_dir = Path::new(&args[1]);
+    info!("Source dir: {}", src_dir.display());
+    let output_dir = src_dir.join(OUTPUT_DIRNAME);
+    info!("Output dir: {}", output_dir.display());
+    match generate_site(&build_target, src_dir, &output_dir) {
         Ok(_) => process::exit(0),
         Err(e) => {
             error!("{e}");
