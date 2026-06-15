@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -e
+
+SRC_DIR=$1
+
+export TOUCHDOWN_TARGET="${TOUCHDOWN_TARGET:-"release"}"
+
+cargo run $SRC_DIR;
+
