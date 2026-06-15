@@ -193,7 +193,7 @@ fn render_page(
         .map_err(Error::StripPrefix)?
         .to_string_lossy();
     let tmpl = env.get_template(&tmpl_path).map_err(Error::Minijinja)?;
-    tmpl.render_to_write(context!(), &mut output_file)
+    tmpl.render_captured_to(context!(), &mut output_file)
         .map_err(Error::Minijinja)?;
     info!("Rendered template to file: {}", output_path.display());
     Ok(())
