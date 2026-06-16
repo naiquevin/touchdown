@@ -106,6 +106,7 @@ fn must_skip(filename: &str) -> bool {
         || filename == OUTPUT_DIRNAME  // the output directory
         || filename.ends_with('~')     // emacs backup files
         || filename.ends_with('#')     // emacs tmp files
+        || filename.starts_with(".#")  // emacs tmp files
         || filename.starts_with('_') // included jinja templates
 }
 
